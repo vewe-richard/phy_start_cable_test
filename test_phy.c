@@ -124,14 +124,14 @@ static int my_phy_start_cable_test(struct phy_device *phydev,
 	netif_testing_on(dev);
 	//err = phydev->drv->cable_test_start(phydev);
 	err = private_cable_test_start(phydev);
-	pr_info("private_cable_test_start end (err: %d)", err);
+	pr_info("private_cable_test_start end (err: %d!)", err);
 	if (err) {
 		netif_testing_off(dev);
 		phy_link_up(phydev);
 		goto out_free;
 	}
 
-	phydev->state = PHY_CABLETEST;
+	//phydev->state = PHY_CABLETEST;
 
 	if (phy_polling_mode(phydev)) {
 		//TODO: trigger phy_state_machine()
