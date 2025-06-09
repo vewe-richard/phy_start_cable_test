@@ -3,8 +3,12 @@
 #include <linux/netdevice.h>
 #include <net/net_namespace.h>
 #include <linux/kallsyms.h>
+#include <linux/ethtool_netlink.h>
 
 static void print_phy_dev_info(struct phy_device *phydev);
+static int my_phy_start_cable_test(struct phy_device *phydev,
+			 struct netlink_ext_ack *extack);
+
 static int __init test_init(void)
 {
     struct net_device *dev;
@@ -35,10 +39,12 @@ static int __init test_init(void)
     
     if (ret == 0) {
         pr_info("Cable test started successfully.");
-    } else {
+    } else if(phydev->drv->cable_test_start) {
         pr_err("Failed to start cable test: %d\n", ret);
         if (extack._msg)
             pr_err("Error message: %s\n", extack._msg);
+    } else {
+	my_phy_start_cable_test(phydev, &extack);
     }
     
     dev_put(dev);
@@ -55,6 +61,76 @@ static void print_phy_dev_info(struct phy_device *phydev) {
     pr_info("Function name: %s\n", namebuf);
 
     pr_info("-EOPNOTSUPP is %d\n", -EOPNOTSUPP);
+}
+
+
+static inline void phy_led_trigger_change_speed(struct phy_device *phy) { }
+static void phy_link_up(struct phy_device *phydev)
+{
+	phydev->phy_link_change(phydev, true);
+	phy_led_trigger_change_speed(phydev);
+}
+
+static void phy_link_down(struct phy_device *phydev)
+{
+	phydev->phy_link_change(phydev, false);
+	phy_led_trigger_change_speed(phydev);
+	WRITE_ONCE(phydev->link_down_events, phydev->link_down_events + 1);
+}
+
+static int my_phy_start_cable_test(struct phy_device *phydev,
+			 struct netlink_ext_ack *extack)
+{
+	struct net_device *dev = phydev->attached_dev;
+	int err = -ENOMEM;
+
+	mutex_lock(&phydev->lock);
+	if (phydev->state == PHY_CABLETEST) {
+		pr_info("PHY already performing a test");
+		err = -EBUSY;
+		goto out;
+	}
+
+	if (phydev->state < PHY_UP ||
+	    phydev->state > PHY_CABLETEST) {
+		pr_info("PHY not configured. Try setting interface up");
+		err = -EBUSY;
+		goto out;
+	}
+
+	err = ethnl_cable_test_alloc(phydev, ETHTOOL_MSG_CABLE_TEST_NTF);
+	if (err) {
+		pr_info("fail to alloc ethnl");
+		goto out;
+	}
+
+	/* Mark the carrier down until the test is complete */
+	phy_link_down(phydev);
+
+	netif_testing_on(dev);
+	err = -1; //phydev->drv->cable_test_start(phydev);
+	if (err) {
+		pr_info("TODO: private cable_test_start()");
+		netif_testing_off(dev);
+		phy_link_up(phydev);
+		goto out_free;
+	}
+
+	phydev->state = PHY_CABLETEST;
+
+	if (phy_polling_mode(phydev))
+		phy_trigger_machine(phydev);
+
+	mutex_unlock(&phydev->lock);
+
+	return 0;
+
+out_free:
+	ethnl_cable_test_free(phydev);
+out:
+	mutex_unlock(&phydev->lock);
+
+	return err;
 }
 
 static void __exit test_exit(void)
