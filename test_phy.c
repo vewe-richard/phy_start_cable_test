@@ -78,6 +78,20 @@ static void phy_link_down(struct phy_device *phydev)
 	WRITE_ONCE(phydev->link_down_events, phydev->link_down_events + 1);
 }
 
+static int private_cable_test_start(struct phy_device *phydev)
+{
+	int bmcr;
+
+	pr_info("private_cable_test_start ...\n");
+
+	bmcr = phy_read(phydev, MII_BMCR);
+	if (bmcr < 0)
+		return bmcr;
+	//TODO:
+
+	return 0;
+}
+
 static int my_phy_start_cable_test(struct phy_device *phydev,
 			 struct netlink_ext_ack *extack)
 {
@@ -108,9 +122,10 @@ static int my_phy_start_cable_test(struct phy_device *phydev,
 	phy_link_down(phydev);
 
 	netif_testing_on(dev);
-	err = -1; //phydev->drv->cable_test_start(phydev);
+	//err = phydev->drv->cable_test_start(phydev);
+	err = private_cable_test_start(phydev);
+	pr_info("private_cable_test_start end (err: %d)", err);
 	if (err) {
-		pr_info("TODO: private cable_test_start()");
 		netif_testing_off(dev);
 		phy_link_up(phydev);
 		goto out_free;
@@ -118,8 +133,10 @@ static int my_phy_start_cable_test(struct phy_device *phydev,
 
 	phydev->state = PHY_CABLETEST;
 
-	if (phy_polling_mode(phydev))
+	if (phy_polling_mode(phydev)) {
+		//TODO: trigger phy_state_machine()
 		phy_trigger_machine(phydev);
+	}
 
 	mutex_unlock(&phydev->lock);
 
@@ -130,6 +147,7 @@ out_free:
 out:
 	mutex_unlock(&phydev->lock);
 
+    	pr_info("exit err %d\n", err);
 	return err;
 }
 
