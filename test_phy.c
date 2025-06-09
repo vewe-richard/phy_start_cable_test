@@ -135,7 +135,8 @@ static int my_phy_start_cable_test(struct phy_device *phydev,
 
 	if (phy_polling_mode(phydev)) {
 		//TODO: trigger phy_state_machine()
-		phy_trigger_machine(phydev);
+		pr_info("TODO: trigger phy_state_machine()");
+		//phy_trigger_machine(phydev);
 	}
 
 	mutex_unlock(&phydev->lock);
