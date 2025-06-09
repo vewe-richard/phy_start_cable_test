@@ -1,0 +1,9 @@
+KERN_SRC = /lib/modules/$(shell uname -r)/build
+#KERN_SRC = /home/richard/prepare/kernel/linux-6.10.2
+obj-m += test_phy.o
+
+all:
+	make -C $(KERN_SRC) M=$(PWD) modules
+
+clean:
+	make -C $(KERN_SRC) M=$(PWD) clean
